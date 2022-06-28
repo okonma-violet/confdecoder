@@ -10,6 +10,7 @@ import (
 
 type ParsedFileData struct {
 	parseddata filedata
+	Keys       []string // пишутся, даже если для ключей нет значения
 }
 
 type filedata map[string]interface{}
@@ -22,6 +23,7 @@ func ParseFile(filepath string) (*ParsedFileData, error) {
 	pfd := &ParsedFileData{parseddata: make(filedata)}
 
 	lines := strings.Split(string(rawdata), "\n")
+	pfd.Keys = make([]string, 0, len(lines))
 
 	for _, line := range lines {
 		if strings.HasPrefix(line, "#") {
@@ -29,6 +31,9 @@ func ParseFile(filepath string) (*ParsedFileData, error) {
 		}
 		elems := strings.Split(strings.TrimSpace(line), " ")
 		if len(elems) == 1 {
+			if len(elems[0]) != 0 {
+				pfd.Keys = append(pfd.Keys, elems[0])
+			}
 			continue
 		}
 		if _, ok := pfd.parseddata[elems[0]]; !ok {
@@ -43,6 +48,7 @@ func ParseFile(filepath string) (*ParsedFileData, error) {
 			} else {
 				pfd.parseddata[elems[0]] = elems[1]
 			}
+			pfd.Keys = append(pfd.Keys, elems[0])
 		} else {
 			return nil, errors.New("two lines with the same name")
 		}

@@ -36,21 +36,20 @@ func ParseFile(filepath string) (*ParsedFileData, error) {
 			}
 			continue
 		}
-		if _, ok := pfd.parseddata[elems[0]]; !ok {
-			if len(elems) > 2 {
-				valueList := make([]string, 0, len(elems)-1)
-				for i := 1; i < len(elems); i++ {
-					if len(elems[i]) != 0 {
-						valueList = append(valueList, elems[i])
-					}
+		_, reassignation := pfd.parseddata[elems[0]]
+		if len(elems) > 2 {
+			valueList := make([]string, 0, len(elems)-1)
+			for i := 1; i < len(elems); i++ {
+				if len(elems[i]) != 0 {
+					valueList = append(valueList, elems[i])
 				}
-				pfd.parseddata[elems[0]] = valueList
-			} else {
-				pfd.parseddata[elems[0]] = elems[1]
 			}
-			pfd.Keys = append(pfd.Keys, elems[0])
+			pfd.parseddata[elems[0]] = valueList
 		} else {
-			return nil, errors.New("two lines with the same name")
+			pfd.parseddata[elems[0]] = elems[1]
+		}
+		if !reassignation {
+			pfd.Keys = append(pfd.Keys, elems[0])
 		}
 	}
 

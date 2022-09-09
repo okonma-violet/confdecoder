@@ -59,7 +59,6 @@ func ParseFile(filepath string) (*ParsedFileData, error) {
 	return pfd, nil
 }
 
-// arguments must be pointers to a structs
 func (pfd *ParsedFileData) DecodeTo(v ...interface{}) error {
 	structsvalues := make([]reflect.Value, 0, len(v))
 
@@ -116,7 +115,6 @@ func (pfd *ParsedFileData) DecodeTo(v ...interface{}) error {
 	return nil
 }
 
-// arguments must be pointers to a structs
 func DecodeFile(filepath string, v ...interface{}) error {
 	pfd, err := ParseFile(filepath)
 	if err != nil {
@@ -124,7 +122,6 @@ func DecodeFile(filepath string, v ...interface{}) error {
 	}
 	return pfd.DecodeTo(v...)
 }
-
 func (data filedata) decodeToField(fieldname string, fv reflect.Value) error {
 	if datv := data[fieldname]; datv != nil {
 		vv := reflect.ValueOf(datv)

@@ -2,6 +2,7 @@ package confdecoder
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"reflect"
 	"strconv"
@@ -9,9 +10,16 @@ import (
 )
 
 type ParsedFileData struct {
-	parseddata filedata
-	Keys       []string // пишутся, даже если для ключей нет значения
+	parseddata        filedata
+	Keys              []string // пишутся, даже если для ключей нет значения
+	NestedStructsMode byte
 }
+
+// (Дефолтный режим) Значения полям вложенных структур присваиваются так же, как и обычным полям
+const NestedStructsModeOne byte = 1
+
+// Значения всем полям вложенной структуры присваиваются одновременно по имени поля-структуры, т.е. все значения в одну строку в файле, пропуск значения считается ошибкой
+const NestedStructsModeTwo byte = 2
 
 type filedata map[string]interface{}
 
@@ -20,7 +28,7 @@ func ParseFile(filepath string) (*ParsedFileData, error) {
 	if err != nil {
 		return nil, err
 	}
-	pfd := &ParsedFileData{parseddata: make(filedata)}
+	pfd := &ParsedFileData{parseddata: make(filedata), NestedStructsMode: 1}
 
 	lines := strings.Split(string(rawdata), "\n")
 	pfd.Keys = make([]string, 0, len(lines))
@@ -75,6 +83,7 @@ func (pfd *ParsedFileData) DecodeTo(v ...interface{}) error {
 			return errors.New("args must be a non-nil pointers to a structs")
 		}
 		if sv.NumField() != 0 {
+			fmt.Println("this1")
 			structsvalues = append(structsvalues, sv)
 		}
 	}
@@ -86,30 +95,39 @@ func (pfd *ParsedFileData) DecodeTo(v ...interface{}) error {
 
 			fv := structsvalues[i].Field(k)
 			fname := structsvalues[i].Type().Field(k).Name
-
+			if !fv.CanSet() {
+				fmt.Println("this2")
+				continue
+			}
 		switching:
 			switch fv.Kind() {
 			case reflect.Ptr:
-				if !fv.IsNil() {
-					fv = fv.Elem()
-					goto switching
-				} else {
-					continue
+				fmt.Println("this3")
+				if fv.IsNil() {
+					fv.Set(reflect.New(fv.Type().Elem()))
 				}
+				fv = fv.Elem()
+				goto switching
 			case reflect.Struct:
+				fmt.Println("this4")
 				if fv.NumField() != 0 {
-					structsvalues = append(structsvalues, fv)
-					continue
+					if pfd.NestedStructsMode == NestedStructsModeOne {
+						structsvalues = append(structsvalues, fv)
+						continue
+					}
 				}
 			case reflect.Interface:
+				fmt.Println("this5")
 				fv = fv.Elem()
 				goto switching
 			}
 			if fv.IsValid() && fv.CanSet() {
+				fmt.Println("this6")
 				if err := pfd.parseddata.decodeToField(fname, fv); err != nil {
 					return err
 				}
 			}
+			fmt.Println("this7")
 		}
 	}
 	return nil
@@ -123,76 +141,122 @@ func DecodeFile(filepath string, v ...interface{}) error {
 	return pfd.DecodeTo(v...)
 }
 func (data filedata) decodeToField(fieldname string, fv reflect.Value) error {
+	fmt.Println("this11", fieldname, data)
 	if datv := data[fieldname]; datv != nil {
 		vv := reflect.ValueOf(datv)
+		fmt.Println("this22")
+		switch fv.Kind() {
+		case reflect.Struct:
+			fmt.Println("this")
+			if fv.NumField() == 0 {
+				return nil
+			}
+			if vv.Kind() != reflect.Slice || fv.NumField() != vv.Len() {
+				return errors.New("mismatch of num of values in file with num of fields in given struct " + fieldname)
+			}
+			l := vv.Len()
+			var ffv reflect.Value
+			for i := 0; i < l; i++ {
+				ffv = fv.Field(i)
+				if ffv.Type().Kind() == reflect.Ptr {
+					if fv.IsNil() {
+						ffv.Set(reflect.New(ffv.Type().Elem()))
+					}
+					ffv = ffv.Elem()
+				}
+				if !ffv.IsValid() || !ffv.CanSet() {
+					continue
+				}
+				switch ffv.Kind() {
+				case reflect.String:
+					if vv.Index(i).Kind() == reflect.String {
+						ffv.SetString(vv.Index(i).String())
+					} else {
+						return errors.New("cant set value of type " + vv.Index(i).Kind().String() + " to field of struct named " + fieldname)
+					}
+				case reflect.Int:
+					if vv.Index(i).Kind() == reflect.String {
+						if convint, err := strconv.Atoi(vv.Index(i).String()); err == nil {
+							covint64 := int64(convint)
+							if ffv.OverflowInt(covint64) {
+								return errors.New("value " + vv.Index(i).String() + " of field " + fieldname + " overflows int")
+							}
+							ffv.SetInt(covint64)
+						} else {
+							return errors.New("cant convert value " + vv.Index(i).String() + " of field " + fieldname + " to int, err: " + err.Error())
+						}
+					} else {
+						return errors.New("cant set value of type " + vv.Index(i).Kind().String() + " to field of struct named " + fieldname)
+					}
+				default:
+					return errors.New("unsupportable type " + ffv.Kind().String() + " for a nested struct's field")
+				}
+			}
 
-		if fv.IsValid() && fv.CanSet() {
-			switch fv.Kind() {
+		case reflect.String:
+			if vv.Kind() == reflect.String {
+				fv.SetString(vv.String())
+			} else {
+				return errors.New("cant set value of type " + vv.Kind().String() + " to field named " + fieldname)
+			}
+		case reflect.Int:
+			if vv.Kind() == reflect.String {
+				if convint, err := strconv.Atoi(vv.String()); err == nil {
+					covint64 := int64(convint)
+					if fv.OverflowInt(covint64) {
+						return errors.New("value of field " + fieldname + " overflows int")
+					}
+					fv.SetInt(covint64)
+				} else {
+					return errors.New("cant convert value of field " + fieldname + " to int, err: " + err.Error())
+				}
+			} else {
+				return errors.New("cant set value of type slice to field named " + fieldname)
+			}
+		case reflect.Slice:
+			switch fv.Type().Elem().Kind() {
 			case reflect.String:
 				if vv.Kind() == reflect.String {
-					fv.SetString(vv.String())
-				} else {
-					return errors.New("cant set value of type " + vv.Kind().String() + " to field named " + fieldname)
+					fv.Set(reflect.MakeSlice(fv.Type(), 1, 1))
+					fv.Index(0).Set(vv)
+					return nil
+				}
+				fv.Set(reflect.MakeSlice(fv.Type(), vv.Len(), vv.Len()))
+				for i := 0; i < fv.Len(); i++ {
+					fv.Index(i).Set(vv.Index(i))
 				}
 			case reflect.Int:
 				if vv.Kind() == reflect.String {
 					if convint, err := strconv.Atoi(vv.String()); err == nil {
 						covint64 := int64(convint)
-						if fv.OverflowInt(covint64) {
+						if fv.Index(0).OverflowInt(covint64) {
 							return errors.New("value of field " + fieldname + " overflows int")
 						}
-						fv.SetInt(covint64)
+						fv.Set(reflect.MakeSlice(fv.Type(), 1, 1))
+						fv.Index(0).SetInt(covint64)
+						return nil
 					} else {
 						return errors.New("cant convert value of field " + fieldname + " to int, err: " + err.Error())
 					}
-				} else {
-					return errors.New("cant set value of type slice to field named " + fieldname)
 				}
-			case reflect.Slice:
-				switch fv.Type().Elem().Kind() {
-				case reflect.String:
-					if vv.Kind() == reflect.String {
-						fv.Set(reflect.MakeSlice(fv.Type(), 1, 1))
-						fv.Index(0).Set(vv)
-						return nil
-					}
-					fv.Set(reflect.MakeSlice(fv.Type(), vv.Len(), vv.Len()))
-					for i := 0; i < fv.Len(); i++ {
-						fv.Index(i).Set(vv.Index(i))
-					}
-				case reflect.Int:
-					if vv.Kind() == reflect.String {
-						if convint, err := strconv.Atoi(vv.String()); err == nil {
-							covint64 := int64(convint)
-							if fv.Index(0).OverflowInt(covint64) {
-								return errors.New("value of field " + fieldname + " overflows int")
-							}
-							fv.Set(reflect.MakeSlice(fv.Type(), 1, 1))
-							fv.Index(0).SetInt(covint64)
-							return nil
-						} else {
-							return errors.New("cant convert value of field " + fieldname + " to int, err: " + err.Error())
+				fv.Set(reflect.MakeSlice(fv.Type(), vv.Len(), vv.Len()))
+				for i := 0; i < fv.Len(); i++ {
+					if convint, err := strconv.Atoi(vv.Index(i).String()); err == nil {
+						covint64 := int64(convint)
+						if fv.Index(0).OverflowInt(covint64) {
+							return errors.New("value of field " + fieldname + " overflows int")
 						}
+						fv.Index(i).SetInt(covint64)
+					} else {
+						return errors.New("cant convert value of field " + fieldname + " to int, err: " + err.Error())
 					}
-					fv.Set(reflect.MakeSlice(fv.Type(), vv.Len(), vv.Len()))
-					for i := 0; i < fv.Len(); i++ {
-						if convint, err := strconv.Atoi(vv.Index(i).String()); err == nil {
-							covint64 := int64(convint)
-							if fv.Index(0).OverflowInt(covint64) {
-								return errors.New("value of field " + fieldname + " overflows int")
-							}
-							fv.Index(i).SetInt(covint64)
-						} else {
-							return errors.New("cant convert value of field " + fieldname + " to int, err: " + err.Error())
-						}
-					}
-				default:
-					return errors.New("unsupportable slice " + fv.Type().Elem().Kind().String() + " type of field \"" + fieldname + "\"")
 				}
-
 			default:
-				return errors.New("unsupportable type " + fv.Kind().String() + " of field \"" + fieldname + "\"")
+				return errors.New("unsupportable slice " + fv.Type().Elem().Kind().String() + " type of field \"" + fieldname + "\"")
 			}
+
+		default:
+			return errors.New("unsupportable type " + fv.Kind().String() + " of field \"" + fieldname + "\"")
 		}
 	}
 

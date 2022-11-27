@@ -2,7 +2,6 @@ package confdecoder
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"reflect"
 	"strconv"
@@ -83,7 +82,6 @@ func (pfd *ParsedFileData) DecodeTo(v ...interface{}) error {
 			return errors.New("args must be a non-nil pointers to a structs")
 		}
 		if sv.NumField() != 0 {
-			fmt.Println("this1")
 			structsvalues = append(structsvalues, sv)
 		}
 	}
@@ -96,20 +94,17 @@ func (pfd *ParsedFileData) DecodeTo(v ...interface{}) error {
 			fv := structsvalues[i].Field(k)
 			fname := structsvalues[i].Type().Field(k).Name
 			if !fv.CanSet() {
-				fmt.Println("this2")
 				continue
 			}
 		switching:
 			switch fv.Kind() {
 			case reflect.Ptr:
-				fmt.Println("this3")
 				if fv.IsNil() {
 					fv.Set(reflect.New(fv.Type().Elem()))
 				}
 				fv = fv.Elem()
 				goto switching
 			case reflect.Struct:
-				fmt.Println("this4")
 				if fv.NumField() != 0 {
 					if pfd.NestedStructsMode == NestedStructsModeOne {
 						structsvalues = append(structsvalues, fv)
@@ -117,17 +112,14 @@ func (pfd *ParsedFileData) DecodeTo(v ...interface{}) error {
 					}
 				}
 			case reflect.Interface:
-				fmt.Println("this5")
 				fv = fv.Elem()
 				goto switching
 			}
 			if fv.IsValid() && fv.CanSet() {
-				fmt.Println("this6")
 				if err := pfd.parseddata.decodeToField(fname, fv); err != nil {
 					return err
 				}
 			}
-			fmt.Println("this7")
 		}
 	}
 	return nil
@@ -141,13 +133,10 @@ func DecodeFile(filepath string, v ...interface{}) error {
 	return pfd.DecodeTo(v...)
 }
 func (data filedata) decodeToField(fieldname string, fv reflect.Value) error {
-	fmt.Println("this11", fieldname, data)
 	if datv := data[fieldname]; datv != nil {
 		vv := reflect.ValueOf(datv)
-		fmt.Println("this22")
 		switch fv.Kind() {
 		case reflect.Struct:
-			fmt.Println("this")
 			if fv.NumField() == 0 {
 				return nil
 			}

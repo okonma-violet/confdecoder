@@ -2,7 +2,6 @@ package confdecoder
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"reflect"
 	"strconv"
@@ -145,10 +144,8 @@ func (data filedata) decodeToField(fieldname string, fv reflect.Value) error {
 				return errors.New("mismatch of num of values in file with num of fields in given struct " + fieldname)
 			}
 			l := vv.Len()
-			fmt.Println(vv.Len(), fv.NumField())
 			var ffv reflect.Value
 			for i := 0; i < l; i++ {
-				fmt.Println("field num", i)
 				ffv = fv.Field(i)
 				if ffv.Type().Kind() == reflect.Ptr {
 					if fv.IsNil() {

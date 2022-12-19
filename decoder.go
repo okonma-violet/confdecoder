@@ -161,7 +161,7 @@ func (data filedata) decodeToField(fieldname string, fv reflect.Value) error {
 					if vv.Index(i).Kind() == reflect.String {
 						ffv.SetString(vv.Index(i).String())
 					} else {
-						return errors.New("cant set value of type " + vv.Index(i).Kind().String() + " to field of struct named " + fieldname)
+						return errors.New("(1)cant set value of type " + vv.Index(i).Kind().String() + " to field of struct named " + fieldname)
 					}
 				case reflect.Int:
 					if vv.Index(i).Kind() == reflect.String {
@@ -175,7 +175,7 @@ func (data filedata) decodeToField(fieldname string, fv reflect.Value) error {
 							return errors.New("cant convert value " + vv.Index(i).String() + " of field " + fieldname + " to int, err: " + err.Error())
 						}
 					} else {
-						return errors.New("cant set value of type " + vv.Index(i).Kind().String() + " to field of struct named " + fieldname)
+						return errors.New("(2)cant set value of type " + vv.Index(i).Kind().String() + " to field of struct named " + fieldname)
 					}
 				case reflect.Slice:
 					switch ffv.Type().Elem().Kind() {
@@ -187,7 +187,7 @@ func (data filedata) decodeToField(fieldname string, fv reflect.Value) error {
 								ffv.Index(k).SetString(elems[k])
 							}
 						} else {
-							return errors.New("cant set value of type " + vv.Index(i).Kind().String() + " as elem of slice to field of struct named " + fieldname)
+							return errors.New("(3)cant set value of type " + vv.Index(i).Kind().String() + " as elem of slice to field of struct named " + fieldname)
 						}
 					case reflect.Int:
 						if vv.Index(i).Kind() == reflect.String {
@@ -205,7 +205,7 @@ func (data filedata) decodeToField(fieldname string, fv reflect.Value) error {
 								}
 							}
 						} else {
-							return errors.New("cant set value of type " + vv.Index(i).Kind().String() + " as elem of slice to field of struct named " + fieldname)
+							return errors.New("(4)cant set value of type " + vv.Index(i).Kind().String() + " as elem of slice to field of struct named " + fieldname)
 						}
 					default:
 						return errors.New("unsupportable slice " + ffv.Type().Elem().Kind().String() + " type of field \"" + fieldname + "\"")
@@ -218,8 +218,14 @@ func (data filedata) decodeToField(fieldname string, fv reflect.Value) error {
 		case reflect.String:
 			if vv.Kind() == reflect.String {
 				fv.SetString(vv.String())
+			} else if vv.Kind() == reflect.Slice && vv.Type().Elem().Kind() == reflect.String {
+				sl := make([]string, vv.Len())
+				for i := 0; i < len(sl); i++ {
+					sl[i] = vv.Index(i).String()
+				}
+				fv.SetString(strings.Join(sl, " "))
 			} else {
-				return errors.New("cant set value of type " + vv.Kind().String() + " to field named " + fieldname)
+				return errors.New("(5)cant set value of type " + vv.Kind().String() + " to field named " + fieldname)
 			}
 		case reflect.Int:
 			if vv.Kind() == reflect.String {
@@ -233,7 +239,7 @@ func (data filedata) decodeToField(fieldname string, fv reflect.Value) error {
 					return errors.New("cant convert value of field " + fieldname + " to int, err: " + err.Error())
 				}
 			} else {
-				return errors.New("cant set value of type slice to field named " + fieldname)
+				return errors.New("(6)cant set value of type slice to field named " + fieldname)
 			}
 
 		case reflect.Slice:
@@ -248,15 +254,21 @@ func (data filedata) decodeToField(fieldname string, fv reflect.Value) error {
 				// for i := 0; i < fv.Len(); i++ {
 				// 	fv.Index(i).Set(vv.Index(i))
 				// }
+				var vvstr string
 				if vv.Kind() == reflect.String {
-					elems := strings.Split(strings.Trim(vv.String(), "{}[]"), ",")
-					fv.Set(reflect.MakeSlice(fv.Type(), len(elems), len(elems)))
-					for k := 0; k < len(elems); k++ {
-						fv.Index(k).SetString(elems[k])
-					}
+					vvstr = vv.String()
+				} else if vv.Kind() == reflect.Slice && vv.Type().Elem().Kind() == reflect.String {
+					vvstr = strings.Join(vv.Interface().([]string), " ")
 				} else {
-					return errors.New("cant set value of type " + vv.Kind().String() + " as elem of slice to field of struct named " + fieldname)
+					return errors.New("(7)cant set value of type " + vv.Kind().String() + " as elem of slice to field of struct named " + fieldname)
 				}
+
+				elems := strings.Split(strings.Trim(vvstr, "{}[]"), ",")
+				fv.Set(reflect.MakeSlice(fv.Type(), len(elems), len(elems)))
+				for k := 0; k < len(elems); k++ {
+					fv.Index(k).SetString(elems[k])
+				}
+
 			case reflect.Int:
 				// if vv.Kind() == reflect.String {
 				// 	if convint, err := strconv.Atoi(vv.String()); err == nil {
@@ -299,7 +311,7 @@ func (data filedata) decodeToField(fieldname string, fv reflect.Value) error {
 						}
 					}
 				} else {
-					return errors.New("cant set value of type " + vv.Kind().String() + " as elem of slice to field named " + fieldname)
+					return errors.New("(8)cant set value of type " + vv.Kind().String() + " as elem of slice to field named " + fieldname)
 				}
 
 			default:

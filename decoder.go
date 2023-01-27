@@ -14,6 +14,11 @@ type ParsedFileData struct {
 	NestedStructsMode byte
 }
 
+type row struct {
+	Name  string
+	Value string
+}
+
 // (Дефолтный режим) Значения полям вложенных структур присваиваются так же, как и обычным полям
 const NestedStructsModeOne byte = 1
 
@@ -21,6 +26,14 @@ const NestedStructsModeOne byte = 1
 const NestedStructsModeTwo byte = 2
 
 type filedata map[string]string
+
+func (pfd *ParsedFileData) Rows() []row {
+	rows := make([]row, 0, len(pfd.parseddata))
+	for n, v := range pfd.parseddata {
+		rows = append(rows, row{n, v})
+	}
+	return rows
+}
 
 func ParseFile(filepath string) (*ParsedFileData, error) {
 	rawdata, err := os.ReadFile(filepath)

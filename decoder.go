@@ -14,7 +14,7 @@ type ParsedFileData struct {
 	NestedStructsMode byte
 }
 
-type row struct {
+type Row struct {
 	Name  string
 	Value string
 }
@@ -27,10 +27,10 @@ const NestedStructsModeTwo byte = 2
 
 type filedata map[string]string
 
-func (pfd *ParsedFileData) Rows() []row {
-	rows := make([]row, 0, len(pfd.parseddata))
+func (pfd *ParsedFileData) Rows() []Row {
+	rows := make([]Row, 0, len(pfd.parseddata))
 	for n, v := range pfd.parseddata {
-		rows = append(rows, row{n, v})
+		rows = append(rows, Row{n, v})
 	}
 	return rows
 }

@@ -10,12 +10,12 @@ import (
 
 type ParsedFileData struct {
 	parseddata        filedata
-	Keys              []string // пишутся, даже если для ключей нет значения
+	Rows              []Row // пишутся все (исключая комменты и пустые строки)
 	NestedStructsMode byte
 }
 
 type Row struct {
-	Name  string
+	Key   string
 	Value string
 }
 
@@ -27,14 +27,16 @@ const NestedStructsModeTwo byte = 2
 
 type filedata map[string]string
 
-func (pfd *ParsedFileData) Rows() []Row {
-	rows := make([]Row, 0, len(pfd.parseddata))
-	for n, v := range pfd.parseddata {
-		rows = append(rows, Row{n, v})
+// only unique keys
+func (pfd *ParsedFileData) Keys() []string {
+	keys := make([]string, 0, len(pfd.parseddata))
+	for k, _ := range pfd.parseddata {
+		keys = append(keys, k)
 	}
-	return rows
+	return keys
 }
 
+// no err on empty file
 func ParseFile(filepath string) (*ParsedFileData, error) {
 	rawdata, err := os.ReadFile(filepath)
 	if err != nil {
@@ -43,7 +45,7 @@ func ParseFile(filepath string) (*ParsedFileData, error) {
 	pfd := &ParsedFileData{parseddata: make(filedata), NestedStructsMode: 1}
 
 	lines := strings.Split(string(rawdata), "\n")
-	pfd.Keys = make([]string, 0, len(lines))
+	pfd.Rows = make([]Row, 0, len(lines))
 
 	for _, line := range lines {
 		if strings.HasPrefix(line, "#") {
@@ -52,20 +54,13 @@ func ParseFile(filepath string) (*ParsedFileData, error) {
 		elems := strings.SplitN(strings.TrimSpace(line), " ", 2)
 		if len(elems) == 1 {
 			if len(elems[0]) != 0 {
-				pfd.Keys = append(pfd.Keys, elems[0])
+				pfd.Rows = append(pfd.Rows, Row{elems[0], ""})
 			}
 			continue
 		}
-
 		value := strings.TrimSpace(elems[1])
-		if _, ok := pfd.parseddata[elems[0]]; ok {
-			if len(value) != 0 {
-				pfd.parseddata[elems[0]] = value
-			}
-		} else {
-			pfd.Keys = append(pfd.Keys, elems[0])
-			pfd.parseddata[elems[0]] = value
-		}
+		pfd.parseddata[elems[0]] = value
+		pfd.Rows = append(pfd.Rows, Row{elems[0], value})
 	}
 
 	if len(pfd.parseddata) == 0 {

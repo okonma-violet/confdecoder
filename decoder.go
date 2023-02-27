@@ -30,7 +30,7 @@ type filedata map[string]string
 // only unique keys
 func (pfd *ParsedFileData) Keys() []string {
 	keys := make([]string, 0, len(pfd.parseddata))
-	for k, _ := range pfd.parseddata {
+	for k := range pfd.parseddata {
 		keys = append(keys, k)
 	}
 	return keys
@@ -48,10 +48,11 @@ func ParseFile(filepath string) (*ParsedFileData, error) {
 	pfd.Rows = make([]Row, 0, len(lines))
 
 	for _, line := range lines {
+		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "#") {
 			continue
 		}
-		elems := strings.SplitN(strings.TrimSpace(line), " ", 2)
+		elems := strings.SplitN(line, " ", 2)
 		if len(elems) == 1 {
 			if len(elems[0]) != 0 {
 				pfd.Rows = append(pfd.Rows, Row{elems[0], ""})

@@ -15,8 +15,25 @@ type ParsedFileData struct {
 }
 
 type Row struct {
-	Key   string
-	Value string
+	Key   string // не может быть пустым
+	Value string // может быть пустым
+}
+
+// сплитит как и при DecodeTo(), т.е. нарезка по SliceDelimeter, непустые значения, но результат может сам по себе быть пустым (НЕ nil)
+func (row Row) SplitValue() []string {
+	elems := strings.Split(row.Value, SliceDelimeter)
+	for k := 0; k < len(elems); {
+		elm := strings.TrimSpace(elems[k])
+		if len(elm) != 0 {
+			elems[k] = elm
+			k++
+			continue
+		}
+		elems = elems[:k+copy(elems[k:], elems[k+1:])]
+	}
+	res := make([]string, len(elems))
+	copy(res, elems)
+	return res
 }
 
 // (Дефолтный режим) Значения полям вложенных структур присваиваются так же, как и обычным полям
@@ -24,6 +41,10 @@ const NestedStructsModeOne byte = 1
 
 // Значения всем полям вложенной структуры присваиваются одновременно по имени поля-структуры, т.е. все значения в одну строку в файле, пропуск значения считается ошибкой
 const NestedStructsModeTwo byte = 2
+
+var NestedStructsModeTwo_FieldsValuesDelimeter string = " "
+
+var SliceDelimeter string = ","
 
 type filedata map[string]string
 
@@ -144,11 +165,15 @@ func (data filedata) decodeToField(fieldname string, fv reflect.Value) error {
 			if fv.NumField() == 0 {
 				return nil
 			}
-			datvs := strings.Split(datv, " ")
-			for i := 0; i < len(datvs); i++ {
-				if len(datvs[i]) == 0 {
-					datvs = datvs[:i+copy(datvs[i:], datvs[i+1:])]
+			datvs := strings.Split(datv, NestedStructsModeTwo_FieldsValuesDelimeter)
+			for i := 0; i < len(datvs); {
+				dtvs := strings.TrimSpace(datvs[i])
+				if len(dtvs) != 0 {
+					datvs[i] = dtvs
+					i++
+					continue
 				}
+				datvs = datvs[:i+copy(datvs[i:], datvs[i+1:])]
 			}
 			if fv.NumField() != len(datvs) {
 				return errors.New("mismatch of num of values in file with num of fields in given struct " + fieldname)
@@ -182,18 +207,36 @@ func (data filedata) decodeToField(fieldname string, fv reflect.Value) error {
 				case reflect.Slice:
 					switch ffv.Type().Elem().Kind() {
 					case reflect.String:
-						elems := strings.Split(strings.Trim(datvs[i], "{}[]"), ",")
+						elems := strings.Split(datvs[i], SliceDelimeter)
 						if len(elems) == 1 && len(strings.TrimSpace(elems[0])) == 0 {
 							elems = nil
+						}
+						for k := 0; k < len(elems); {
+							elm := strings.TrimSpace(elems[k])
+							if len(elm) != 0 {
+								elems[k] = elm
+								k++
+								continue
+							}
+							elems = elems[:k+copy(elems[k:], elems[k+1:])]
 						}
 						ffv.Set(reflect.MakeSlice(ffv.Type(), len(elems), len(elems)))
 						for k := 0; k < len(elems); k++ {
 							ffv.Index(k).SetString(elems[k])
 						}
 					case reflect.Int:
-						elems := strings.Split(strings.Trim(datvs[i], "{}[]"), ",")
+						elems := strings.Split(datvs[i], SliceDelimeter)
 						if len(elems) == 1 && len(strings.TrimSpace(elems[0])) == 0 {
 							elems = nil
+						}
+						for k := 0; k < len(elems); {
+							elm := strings.TrimSpace(elems[k])
+							if len(elm) != 0 {
+								elems[k] = elm
+								k++
+								continue
+							}
+							elems = elems[:k+copy(elems[k:], elems[k+1:])]
 						}
 						ffv.Set(reflect.MakeSlice(ffv.Type(), len(elems), len(elems)))
 						for k := 0; k < len(elems); k++ {
@@ -239,13 +282,22 @@ func (data filedata) decodeToField(fieldname string, fv reflect.Value) error {
 				// for i := 0; i < fv.Len(); i++ {
 				// 	fv.Index(i).Set(vv.Index(i))
 				// }
-				elems := strings.Split(strings.Trim(datv, "{}[]"), ",")
+				elems := strings.Split(datv, SliceDelimeter)
 				if len(elems) == 1 && len(strings.TrimSpace(elems[0])) == 0 {
 					elems = nil
 				}
+				for k := 0; k < len(elems); {
+					elm := strings.TrimSpace(elems[k])
+					if len(elm) != 0 {
+						elems[k] = elm
+						k++
+						continue
+					}
+					elems = elems[:k+copy(elems[k:], elems[k+1:])]
+				}
 				fv.Set(reflect.MakeSlice(fv.Type(), len(elems), len(elems)))
 				for k := 0; k < len(elems); k++ {
-					fv.Index(k).SetString(strings.TrimSpace(elems[k]))
+					fv.Index(k).SetString(elems[k])
 				}
 
 			case reflect.Int:
@@ -274,13 +326,22 @@ func (data filedata) decodeToField(fieldname string, fv reflect.Value) error {
 				// 		return errors.New("cant convert value of field " + fieldname + " to int, err: " + err.Error())
 				// 	}
 				// }
-				elems := strings.Split(strings.Trim(datv, "{}[]"), ",")
+				elems := strings.Split(datv, SliceDelimeter)
 				if len(elems) == 1 && len(strings.TrimSpace(elems[0])) == 0 {
 					elems = nil
 				}
+				for k := 0; k < len(elems); {
+					elm := strings.TrimSpace(elems[k])
+					if len(elm) != 0 {
+						elems[k] = elm
+						k++
+						continue
+					}
+					elems = elems[:k+copy(elems[k:], elems[k+1:])]
+				}
 				fv.Set(reflect.MakeSlice(fv.Type(), len(elems), len(elems)))
 				for k := 0; k < len(elems); k++ {
-					if convint, err := strconv.Atoi(strings.TrimSpace(elems[k])); err == nil {
+					if convint, err := strconv.Atoi(elems[k]); err == nil {
 						covint64 := int64(convint)
 						if fv.Index(k).OverflowInt(covint64) {
 							return errors.New("value " + elems[k] + " of field " + fieldname + " overflows int")

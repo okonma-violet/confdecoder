@@ -212,13 +212,14 @@ func (data filedata) decodeToField(fieldname string, fv reflect.Value) error {
 							elems = nil
 						}
 						for k := 0; k < len(elems); {
-							elm := strings.TrimSpace(elems[k])
-							if len(elm) != 0 {
-								elems[k] = elm
-								k++
-								continue
-							}
-							elems = elems[:k+copy(elems[k:], elems[k+1:])]
+							elems[k] = strings.TrimSpace(elems[k])
+							// elm := strings.TrimSpace(elems[k])
+							// if len(elm) != 0 {
+							// 	elems[k] = elm
+							// 	k++
+							// 	continue
+							// }
+							// elems = elems[:k+copy(elems[k:], elems[k+1:])]
 						}
 						ffv.Set(reflect.MakeSlice(ffv.Type(), len(elems), len(elems)))
 						for k := 0; k < len(elems); k++ {
